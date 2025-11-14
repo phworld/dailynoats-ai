@@ -1,319 +1,224 @@
-const products = [
-  {
-    id: 'weight-loss-bundle',
-    name: '30-DAY RESET BUNDLE',
-    description:
-      'Jumpstart your wellness journey with the 30-Day Reset Bundle — our bestselling Daily N\'Oats flavors in a convenient 30-pack bundle. This low-carb, high-fiber breakfast supports weight loss, gut health, and balanced blood sugar naturally.',
-    price: 138,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: [
-      'high-protein',
-      'keto',
-      'dairy-free',
-      'sugar-free',
-      'vegan',
-      'no-preservatives',
-      'soy-free',
-      'vegetarian',
-    ],
-    allergens: ['nuts'],
-    flavor: 'assorted',
-    tags: ['30-day reset', 'weight loss', 'bundles'],
-    shopifyHandle: 'weight-loss-bundle',
-  },
-  {
-    id: '30-day-glp-bundle',
-    name: "THE DAILY N'OATS GLP-1 BUNDLE",
-    description:
-      'Jumpstart your wellness journey with the 30-Day Reset Bundle — our bestselling Daily N\'Oats flavors in a convenient 30-pack bundle. This low-carb, high-fiber breakfast supports weight loss, gut health, and balanced blood sugar naturally. Perfect for those on GLP-1 medications.',
-    price: 138,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: [
-      'high-protein',
-      'keto',
-      'dairy-free',
-      'sugar-free',
-      'vegan',
-      'no-preservatives',
-      'soy-free',
-      'vegetarian',
-    ],
-    allergens: ['nuts'],
-    flavor: 'assorted',
-    tags: ['GLP-1', 'weight loss', 'bundles'],
-    shopifyHandle: '30-day-glp-bundle',
-  },
-  {
-    id: 'mix-and-match-bundle',
-    name: 'Mix and Match Bundle',
-    description:
-      'Build your own bundle and design your perfect week of breakfasts. Mix, match, and customize from your favorite Daily N\'Oats flavors for mornings made easy.',
-    price: 72.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free'],
-    allergens: ['nuts'],
-    flavor: 'customer choice',
-    tags: ['bundle', 'custom', 'variety'],
-    shopifyHandle: 'mix-and-match-bundle',
-  },
-  {
-    id: 'daily-noats-6-pack',
-    name: "Daily N'Oats 6-Pack",
-    description:
-      "Choose your favorite Daily N'Oats flavor in a convenient 6-pack. Perfect for trying Daily N\'Oats or keeping your pantry stocked with a go-to flavor.",
-    price: 30,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['high-protein', 'keto', 'dairy-free', 'sugar-free'],
-    allergens: ['nuts'],
-    flavor: 'various',
-    tags: ['6-pack', 'flexible', 'sampler'],
-    shopifyHandle: 'daily-noats-6-pack',
-  },
-  {
-    id: 'apple-cinnamon-noats',
-    name: "Apple + Cinnamon N\'Oats",
-    description:
-      'Taste the sweet and familiar flavor of real apple and warm cinnamon without the sugar crash. Apple + Cinnamon N\'Oats feels like dessert but eats like a superfood.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'apple cinnamon',
-    tags: ['single', 'comfort', 'classic'],
-    shopifyHandle: 'apple-cinnamon-noats',
-  },
-  {
-    id: 'banana-macadamia-noats',
-    name: "Banana + Macadamia N\'Oats",
-    description:
-      'Experience the delightful duo of natural banana flavor and rich macadamia nuts. Banana + Macadamia N\'Oats is creamy, satisfying, and naturally balanced.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'banana macadamia',
-    tags: ['single', 'tropical', 'indulgent'],
-    shopifyHandle: 'banana-macadamia-noats',
-  },
-  {
-    id: 'blueberry-spice-noats',
-    name: "Blueberry + Spice N\'Oats",
-    description:
-      'Blueberry + Spice, the sweet-spicy blend that feels like a cozy bakery in a bowl — without the sugar crash. Made to support balanced blood sugar and satiety.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'blueberry spice',
-    tags: ['single', 'fruity', 'warming'],
-    shopifyHandle: 'blueberry-spice-noats',
-  },
-  {
-    id: 'brown-sugar-cinnamon-noats',
-    name: "Brown Sugar + Cinnamon N\'Oats",
-    description:
-      'Transport yourself to a cozy bakery with Brown Sugar + Cinnamon N\'Oats — naturally sweet, warmly spiced, and made for steady energy and happy blood sugar.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'brown sugar cinnamon',
-    tags: ['single', 'comfort', 'classic'],
-    shopifyHandle: 'brown-sugar-cinnamon-noats',
-  },
-  {
-    id: 'cacao-peanut-butter-noats',
-    name: "Cacao + Peanut Butter N\'Oats",
-    description:
-      'Satisfy your cravings without the sugar crash. Cacao + Peanut Butter N\'Oats delivers chocolate-peanut-butter flavor with balanced macros and gut-friendly fiber.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 260,
-    dietary: ['keto', 'high-protein'],
-    allergens: ['nuts'],
-    flavor: 'chocolate peanut butter',
-    tags: ['single', 'indulgent', 'dessert-like'],
-    shopifyHandle: 'cacao-peanut-butter-noats',
-  },
-  {
-    id: 'naked-noats',
-    name: "Naked N\'Oats",
-    description:
-      'Unsweetened, unflavored, and fully customizable. Naked N\'Oats is your blank canvas for sweet, savory, or anything in between—still low-carb and gut-friendly.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 230,
-    dietary: ['keto', 'gluten-free', 'vegan', 'no-preservatives'],
-    allergens: [],
-    flavor: 'plain',
-    tags: ['single', 'unsweetened', 'versatile'],
-    shopifyHandle: 'naked-noats',
-  },
-  {
-    id: 'wild-strawberry-noats',
-    name: "Wild Strawberry N\'Oats",
-    description:
-      'Bright, juicy strawberry flavor without added sugar. Wild Strawberry N\'Oats is fresh, fruity, and designed to keep you full and focused.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'strawberry',
-    tags: ['single', 'fruity', 'refreshing'],
-    shopifyHandle: 'wild-strawberry-noats',
-  },
-  {
-    id: 'maple-pecan-noats',
-    name: "Maple + Pecan N\'Oats",
-    description:
-      'Rich maple flavor and buttery pecans combine in Maple + Pecan N\'Oats for a cozy, satisfying breakfast that still supports your low-carb goals.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 260,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'maple pecan',
-    tags: ['single', 'comfort', 'indulgent'],
-    shopifyHandle: 'maple-pecan-noats',
-  },
-  {
-    id: 'vanilla-almond-noats',
-    name: "Vanilla + Almond N\'Oats",
-    description:
-      'Creamy vanilla and lightly toasted almond come together in Vanilla + Almond N\'Oats for a smooth, satisfying, and balanced breakfast.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'vanilla almond',
-    tags: ['single', 'smooth', 'classic'],
-    shopifyHandle: 'vanilla-almond-noats',
-  },
-  {
-    id: 'pumpkin-spice-noats',
-    name: "Pumpkin Spice N\'Oats",
-    description:
-      'All the cozy flavor of pumpkin pie without the sugar. Pumpkin Spice N\'Oats is a seasonal favorite made for stable energy and satiety.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'pumpkin spice',
-    tags: ['single', 'seasonal', 'comfort'],
-    shopifyHandle: 'pumpkin-spice-noats',
-  },
-  {
-    id: 'daily-noats',
-    name: "DAILY N\'OATS",
-    description:
-      "Start your day with DAILY N\'OATS — a low-carb, high-fiber, superfood cereal made to support gut health, satiety, and stable blood sugar.",
-    price: 12.99,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: [
-      'high-protein',
-      'keto',
-      'dairy-free',
-      'sugar-free',
-      'vegan',
-      'no-preservatives',
-      'soy-free',
-    ],
-    allergens: ['nuts'],
-    flavor: 'assorted',
-    tags: ['hero', 'staple'],
-    shopifyHandle: 'daily-noats',
-  },
-  {
-    id: 'daily-noats-gift-card',
-    name: "DAILY N\'OATS GIFT CARD",
-    description:
-      'Treat someone (or yourself) to the gift of low-carb, gut-friendly breakfasts with the Daily N\'Oats Gift Card.',
-    price: 25,
-    netCarbs: 0,
-    protein: 0,
-    fiber: 0,
-    fat: 0,
-    calories: 0,
-    dietary: [],
-    allergens: [],
-    flavor: 'n/a',
-    tags: ['gift', 'digital'],
-    shopifyHandle: 'daily-noats-gift-card',
-  },
-  {
-    id: 'daily-noats-singles',
-    name: "DAILY N\'OATS SINGLES",
-    description:
-      'Are you curious about Daily N\'Oats but not ready to commit? Daily N\'Oats Singles let you try individual flavors that fit your taste and goals.',
-    price: 5.5,
-    netCarbs: 4,
-    protein: 12,
-    fiber: 10,
-    fat: 10,
-    calories: 250,
-    dietary: ['keto', 'gluten-free', 'high-fiber'],
-    allergens: ['nuts'],
-    flavor: 'assorted singles',
-    tags: ['sampler', 'entry', 'single-serve'],
-    shopifyHandle: 'daily-noats-singles',
-  },
-];
+// server.js
+// Daily N'Oats AI Nutrition Planner backend
+// - Uses products from products_catalog.js
+// - Only recommends real Daily N'Oats products
+// - Returns structured JSON: { plan_markdown, recommended_products }
 
-export default products;
+import express from "express";
+import cors from "cors";
+import OpenAI from "openai";
+import products from "./products_catalog.js";
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+app.use(cors());
+app.use(express.json());
+
+if (!process.env.OPENAI_API_KEY) {
+  console.warn(
+    "WARNING: OPENAI_API_KEY is not set. Start the server with:\n" +
+      'OPENAI_API_KEY="sk-..." npm start'
+  );
+}
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Build a Set of valid product IDs so we never recommend anything else
+const validProductIds = new Set(products.map((p) => p.id));
+
+// Compact catalog summary for the prompt
+const CATALOG_SUMMARY = products
+  .map((p) => {
+    const dietary = p.dietary?.join(", ") || "none";
+    const allergens = p.allergens?.join(", ") || "none";
+    const flavor = p.flavor || "unspecified";
+
+    return `- id: ${p.id}
+  name: ${p.name}
+  price: $${p.price}
+  netCarbs: ${p.netCarbs}g, protein: ${p.protein}g, fiber: ${p.fiber}g
+  flavor: ${flavor}
+  dietary: ${dietary}
+  allergens: ${allergens}`;
+  })
+  .join("\n\n");
+
+function buildSystemPrompt() {
+  return `
+You are the AI nutrition assistant for Daily N'Oats, a low-carb, high-protein,
+blood-sugar-friendly breakfast brand.
+
+You design simple, realistic breakfast routines using ONLY Daily N'Oats products.
+
+DAILY N'OATS PRODUCT CATALOG (SOURCE OF TRUTH):
+
+${CATALOG_SUMMARY}
+
+STRICT RULES:
+- You may recommend ONLY products whose "id" appears in the catalog above.
+- You MUST NOT mention or recommend any other brands or generic items
+  (for example: do NOT mention "Classic Steel Cut Oats", "SCO-001",
+  or any product not listed in the catalog).
+- When you talk about a product, use its catalog name (e.g., "30-DAY RESET BUNDLE",
+  "Naked N'Oats", "Daily N'Oats 6-Pack").
+- Consider dietary preferences, allergens, health goals, and convenience.
+- Favor bundles (e.g., 30-day reset or variety bundles) when the customer wants structure.
+- For GLP-1 / weight loss / diabetes / blood sugar goals, prioritize:
+  - 30-DAY RESET BUNDLE (weight-loss-bundle)
+  - THE DAILY N'OATS GLP-1 BUNDLE (30-day-glp-bundle)
+  - other high-protein, keto, sugar-free, gluten-free products.
+- If a product contains nuts, avoid it when the customer indicates nut allergy.
+
+Tone: warm, encouraging, practical. You do NOT give medical advice.
+You always include a short disclaimer that the plan is general information only.`;
+}
+
+function buildUserPrompt(profile) {
+  return `
+Create a personalized Daily N'Oats breakfast plan for this customer.
+
+CUSTOMER PROFILE (JSON):
+${JSON.stringify(profile, null, 2)}
+
+TASK:
+1. Design a clear, easy-to-follow Daily N'Oats routine for 7–30 days.
+2. Tie recommendations explicitly to Daily N'Oats products from the catalog by id.
+3. Take into account:
+   - goal (weight loss, GLP-1 support, gut health, energy, etc.)
+   - dietary restrictions (keto, vegan, gluten-free, dairy-free, etc.)
+   - health conditions (e.g., diabetes, pre-diabetes, high cholesterol)
+   - activity_level (sedentary, moderately active, very active)
+   - timing (breakfast, pre-workout, post-workout, snack)
+   - flavor preferences
+   - prep_time and convenience
+4. Prefer a small number of core products that the customer can use consistently,
+   with optional variety suggestions.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON (no markdown, no extra commentary) in this exact structure:
+
+{
+  "plan_markdown": "string, a well-formatted Markdown plan that can be rendered on a web page",
+  "recommended_products": [
+    {
+      "id": "product-id-from-catalog",
+      "reason": "one or two short sentences explaining why this product is a good fit"
+    }
+  ]
+}
+
+REQUIREMENTS:
+- "recommended_products" must contain between 2 and 6 items.
+- Every "id" MUST match one of the product ids in the catalog.
+- In "plan_markdown", mention the products by their names (not just ids).
+- DO NOT embed JSON in the markdown. "recommended_products" must be a real JSON array.
+- Include a short weekly prep guide and guidance for the first 2–4 weeks.
+- End "plan_markdown" with a short disclaimer:
+  "This plan is for general information only and is not medical advice.
+  Please consult your healthcare provider for personalized recommendations."`;
+}
+
+app.post("/api/nutrition-plan", async (req, res) => {
+  try {
+    const {
+      email,
+      goal,
+      restrictions,
+      health_conditions,
+      activity_level,
+      timing,
+      flavors,
+      prep_time,
+      priority,
+    } = req.body || {};
+
+    const profile = {
+      email: email || null,
+      goal: goal || null,
+      restrictions: restrictions || [],
+      health_conditions: health_conditions || [],
+      activity_level: activity_level || null,
+      timing: timing || [],
+      flavors: flavors || [],
+      prep_time: prep_time || null,
+      priority: priority || null,
+    };
+
+    const systemPrompt = buildSystemPrompt();
+    const userPrompt = buildUserPrompt(profile);
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    const raw = completion.choices?.[0]?.message?.content;
+    if (!raw) {
+      throw new Error("No content returned from OpenAI");
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      console.error("Failed to parse JSON from model:", raw);
+      throw new Error("Model did not return valid JSON.");
+    }
+
+    const plan_markdown = parsed.plan_markdown || "";
+    const recommended_products_raw = Array.isArray(parsed.recommended_products)
+      ? parsed.recommended_products
+      : [];
+
+    // Filter & sanitize recommended products
+    const recommended_products = recommended_products_raw
+      .filter(
+        (item) =>
+          item &&
+          typeof item.id === "string" &&
+          validProductIds.has(item.id.trim())
+      )
+      .map((item) => ({
+        id: item.id.trim(),
+        reason: String(item.reason || "").trim(),
+      }));
+
+    // Attach extra product metadata
+    const annotated_recommendations = recommended_products.map((item) => {
+      const product = products.find((p) => p.id === item.id);
+      return {
+        ...item,
+        name: product?.name || item.id,
+        price: product?.price ?? null,
+        dietary: product?.dietary ?? null,
+        netCarbs: product?.netCarbs ?? null,
+        protein: product?.protein ?? null,
+        fiber: product?.fiber ?? null,
+      };
+    });
+
+    res.json({
+      plan_markdown,
+      recommended_products: annotated_recommendations,
+    });
+  } catch (err) {
+    console.error("Server error:", err);
+    const message =
+      err?.response?.data?.error?.message || err.message || "Unknown error";
+    res.status(500).json({
+      error: "Server error",
+      message,
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Daily N'Oats AI server running on port ${PORT}`);
+});
