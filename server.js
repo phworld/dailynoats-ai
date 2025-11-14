@@ -25,7 +25,8 @@ if (!process.env.OPENAI_API_KEY) {
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-// 🔹 Add THIS helper function here:
+
+// 🔹 Helper: sync AI plan to Shopify (customer + metaobject + metafield)
 async function syncPlanToShopify(email, plan_markdown, recommended_products) {
   try {
     if (!email) return;
@@ -131,6 +132,8 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
   } catch (err) {
     console.error("Failed to sync plan to Shopify:", err);
   }
+}
+
 // Build a Set of valid product IDs so we never recommend anything else
 const validProductIds = new Set(products.map((p) => p.id));
 
@@ -166,12 +169,13 @@ PREPARATION RULES (IMPORTANT):
 - You may optionally mention almond milk, oat milk, or other milk alternatives,
   but the phrasing must always center on adding milk, not water.
 
-  LANGUAGE RULES (IMPORTANT):
+LANGUAGE RULES (IMPORTANT):
 - Do NOT refer to "oats" generically.
 - Always say "Daily N'Oats", "Daily N'Oats servings", or "Daily N'Oats cups".
 - For weekly prep, prefer phrases like:
   "Portion your Daily N'Oats servings for the week" or
   "Pre-portion your Daily N'Oats cups into containers for the week."
+
 DAILY N'OATS PRODUCT CATALOG (SOURCE OF TRUTH):
 
 ${CATALOG_SUMMARY}
@@ -322,7 +326,8 @@ app.post("/api/nutrition-plan", async (req, res) => {
         fiber: product?.fiber ?? null,
       };
     });
- // 🔹 NEW: push plan to Shopify in the background
+
+    // 🔹 NEW: push plan to Shopify in the background
     syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
 
     // Respond to browser as before
