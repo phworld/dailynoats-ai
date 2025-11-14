@@ -60,7 +60,13 @@ PREPARATION RULES (IMPORTANT):
   "Either add milk and let it sit overnight or cook it. We suggest cooking it."
 - You may optionally mention almond milk, oat milk, or other milk alternatives,
   but the phrasing must always center on adding milk, not water.
-  
+
+  LANGUAGE RULES (IMPORTANT):
+- Do NOT refer to "oats" generically.
+- Always say "Daily N'Oats", "Daily N'Oats servings", or "Daily N'Oats cups".
+- For weekly prep, prefer phrases like:
+  "Portion your Daily N'Oats servings for the week" or
+  "Pre-portion your Daily N'Oats cups into containers for the week."
 DAILY N'OATS PRODUCT CATALOG (SOURCE OF TRUTH):
 
 ${CATALOG_SUMMARY}
