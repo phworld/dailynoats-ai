@@ -25,7 +25,112 @@ if (!process.env.OPENAI_API_KEY) {
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+// 🔹 Add THIS helper function here:
+async function syncPlanToShopify(email, plan_markdown, recommended_products) {
+  try {
+    if (!email) return;
 
+    const store = process.env.SHOPIFY_STORE;
+    const token = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+    if (!store || !token) {
+      console.warn("Shopify env vars missing, skipping sync");
+      return;
+    }
+
+    const baseUrl = `https://${store}.myshopify.com/admin/api/2024-10`;
+
+    // 1) Find or create customer by email
+    const searchRes = await fetch(
+      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(email)}`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": token,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    const searchData = await searchRes.json();
+    let customer = searchData.customers?.[0];
+
+    if (!customer) {
+      // Create customer if not found
+      const createRes = await fetch(`${baseUrl}/customers.json`, {
+        method: "POST",
+        headers: {
+          "X-Shopify-Access-Token": token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customer: {
+            email,
+            tags: "AI_Nutrition_Quiz",
+          },
+        }),
+      });
+      const createData = await createRes.json();
+      customer = createData.customer;
+    }
+
+    if (!customer) {
+      console.warn("Could not create or find customer for email:", email);
+      return;
+    }
+
+    // 2) Create metaobject instance of type ai_plan
+    const metaRes = await fetch(`${baseUrl}/metaobjects/ai_plan.json`, {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        metaobject: {
+          type: "ai_plan",
+          fields: [
+            { key: "plan_text", value: plan_markdown || "" },
+            {
+              key: "products",
+              value: JSON.stringify(recommended_products || []),
+            },
+          ],
+        },
+      }),
+    });
+
+    const metaData = await metaRes.json();
+    const metaobjectId = metaData?.metaobject?.id;
+    if (!metaobjectId) {
+      console.warn("Failed to create ai_plan metaobject:", metaData);
+      return;
+    }
+
+    // 3) Attach metaobject to customer via metafield ai.plan
+    await fetch(`${baseUrl}/customers/${customer.id}.json`, {
+      method: "PUT",
+      headers: {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customer: {
+          id: customer.id,
+          tags: `${customer.tags || ""},AI_Nutrition_Quiz`.trim(),
+          metafields: [
+            {
+              namespace: "ai",
+              key: "plan",
+              type: "metaobject_reference",
+              value: metaobjectId,
+            },
+          ],
+        },
+      }),
+    });
+
+    console.log("Synced AI plan to Shopify for", email);
+  } catch (err) {
+    console.error("Failed to sync plan to Shopify:", err);
+  }
 // Build a Set of valid product IDs so we never recommend anything else
 const validProductIds = new Set(products.map((p) => p.id));
 
@@ -217,7 +322,10 @@ app.post("/api/nutrition-plan", async (req, res) => {
         fiber: product?.fiber ?? null,
       };
     });
+ // 🔹 NEW: push plan to Shopify in the background
+    syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
 
+    // Respond to browser as before
     res.json({
       plan_markdown,
       recommended_products: annotated_recommendations,
