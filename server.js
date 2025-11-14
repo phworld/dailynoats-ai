@@ -1,83 +1,319 @@
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
-import OpenAI from "openai";
-
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const productCatalog = [
+const products = [
   {
-    name: "Classic Steel Cut Oats",
-    sku: "SCO-001",
-    nutrition: { calories: 150, protein: "5g", fiber: "8g" },
-    dietary: ["gluten-free", "vegan"],
-    best_for: ["Weight loss", "Blood sugar management", "Heart health"],
+    id: 'weight-loss-bundle',
+    name: '30-DAY RESET BUNDLE',
+    description:
+      'Jumpstart your wellness journey with the 30-Day Reset Bundle — our bestselling Daily N\'Oats flavors in a convenient 30-pack bundle. This low-carb, high-fiber breakfast supports weight loss, gut health, and balanced blood sugar naturally.',
+    price: 138,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: [
+      'high-protein',
+      'keto',
+      'dairy-free',
+      'sugar-free',
+      'vegan',
+      'no-preservatives',
+      'soy-free',
+      'vegetarian',
+    ],
+    allergens: ['nuts'],
+    flavor: 'assorted',
+    tags: ['30-day reset', 'weight loss', 'bundles'],
+    shopifyHandle: 'weight-loss-bundle',
   },
   {
-    name: "Protein-Enhanced Blend",
-    sku: "PEB-003",
-    nutrition: { calories: 220, protein: "15g", fiber: "6g" },
-    dietary: ["gluten-free"],
-    best_for: ["Weight loss", "Muscle recovery", "High protein"],
+    id: '30-day-glp-bundle',
+    name: "THE DAILY N'OATS GLP-1 BUNDLE",
+    description:
+      'Jumpstart your wellness journey with the 30-Day Reset Bundle — our bestselling Daily N\'Oats flavors in a convenient 30-pack bundle. This low-carb, high-fiber breakfast supports weight loss, gut health, and balanced blood sugar naturally. Perfect for those on GLP-1 medications.',
+    price: 138,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: [
+      'high-protein',
+      'keto',
+      'dairy-free',
+      'sugar-free',
+      'vegan',
+      'no-preservatives',
+      'soy-free',
+      'vegetarian',
+    ],
+    allergens: ['nuts'],
+    flavor: 'assorted',
+    tags: ['GLP-1', 'weight loss', 'bundles'],
+    shopifyHandle: '30-day-glp-bundle',
+  },
+  {
+    id: 'mix-and-match-bundle',
+    name: 'Mix and Match Bundle',
+    description:
+      'Build your own bundle and design your perfect week of breakfasts. Mix, match, and customize from your favorite Daily N\'Oats flavors for mornings made easy.',
+    price: 72.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free'],
+    allergens: ['nuts'],
+    flavor: 'customer choice',
+    tags: ['bundle', 'custom', 'variety'],
+    shopifyHandle: 'mix-and-match-bundle',
+  },
+  {
+    id: 'daily-noats-6-pack',
+    name: "Daily N'Oats 6-Pack",
+    description:
+      "Choose your favorite Daily N'Oats flavor in a convenient 6-pack. Perfect for trying Daily N\'Oats or keeping your pantry stocked with a go-to flavor.",
+    price: 30,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['high-protein', 'keto', 'dairy-free', 'sugar-free'],
+    allergens: ['nuts'],
+    flavor: 'various',
+    tags: ['6-pack', 'flexible', 'sampler'],
+    shopifyHandle: 'daily-noats-6-pack',
+  },
+  {
+    id: 'apple-cinnamon-noats',
+    name: "Apple + Cinnamon N\'Oats",
+    description:
+      'Taste the sweet and familiar flavor of real apple and warm cinnamon without the sugar crash. Apple + Cinnamon N\'Oats feels like dessert but eats like a superfood.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'apple cinnamon',
+    tags: ['single', 'comfort', 'classic'],
+    shopifyHandle: 'apple-cinnamon-noats',
+  },
+  {
+    id: 'banana-macadamia-noats',
+    name: "Banana + Macadamia N\'Oats",
+    description:
+      'Experience the delightful duo of natural banana flavor and rich macadamia nuts. Banana + Macadamia N\'Oats is creamy, satisfying, and naturally balanced.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'banana macadamia',
+    tags: ['single', 'tropical', 'indulgent'],
+    shopifyHandle: 'banana-macadamia-noats',
+  },
+  {
+    id: 'blueberry-spice-noats',
+    name: "Blueberry + Spice N\'Oats",
+    description:
+      'Blueberry + Spice, the sweet-spicy blend that feels like a cozy bakery in a bowl — without the sugar crash. Made to support balanced blood sugar and satiety.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'blueberry spice',
+    tags: ['single', 'fruity', 'warming'],
+    shopifyHandle: 'blueberry-spice-noats',
+  },
+  {
+    id: 'brown-sugar-cinnamon-noats',
+    name: "Brown Sugar + Cinnamon N\'Oats",
+    description:
+      'Transport yourself to a cozy bakery with Brown Sugar + Cinnamon N\'Oats — naturally sweet, warmly spiced, and made for steady energy and happy blood sugar.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'brown sugar cinnamon',
+    tags: ['single', 'comfort', 'classic'],
+    shopifyHandle: 'brown-sugar-cinnamon-noats',
+  },
+  {
+    id: 'cacao-peanut-butter-noats',
+    name: "Cacao + Peanut Butter N\'Oats",
+    description:
+      'Satisfy your cravings without the sugar crash. Cacao + Peanut Butter N\'Oats delivers chocolate-peanut-butter flavor with balanced macros and gut-friendly fiber.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 260,
+    dietary: ['keto', 'high-protein'],
+    allergens: ['nuts'],
+    flavor: 'chocolate peanut butter',
+    tags: ['single', 'indulgent', 'dessert-like'],
+    shopifyHandle: 'cacao-peanut-butter-noats',
+  },
+  {
+    id: 'naked-noats',
+    name: "Naked N\'Oats",
+    description:
+      'Unsweetened, unflavored, and fully customizable. Naked N\'Oats is your blank canvas for sweet, savory, or anything in between—still low-carb and gut-friendly.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 230,
+    dietary: ['keto', 'gluten-free', 'vegan', 'no-preservatives'],
+    allergens: [],
+    flavor: 'plain',
+    tags: ['single', 'unsweetened', 'versatile'],
+    shopifyHandle: 'naked-noats',
+  },
+  {
+    id: 'wild-strawberry-noats',
+    name: "Wild Strawberry N\'Oats",
+    description:
+      'Bright, juicy strawberry flavor without added sugar. Wild Strawberry N\'Oats is fresh, fruity, and designed to keep you full and focused.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'strawberry',
+    tags: ['single', 'fruity', 'refreshing'],
+    shopifyHandle: 'wild-strawberry-noats',
+  },
+  {
+    id: 'maple-pecan-noats',
+    name: "Maple + Pecan N\'Oats",
+    description:
+      'Rich maple flavor and buttery pecans combine in Maple + Pecan N\'Oats for a cozy, satisfying breakfast that still supports your low-carb goals.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 260,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'maple pecan',
+    tags: ['single', 'comfort', 'indulgent'],
+    shopifyHandle: 'maple-pecan-noats',
+  },
+  {
+    id: 'vanilla-almond-noats',
+    name: "Vanilla + Almond N\'Oats",
+    description:
+      'Creamy vanilla and lightly toasted almond come together in Vanilla + Almond N\'Oats for a smooth, satisfying, and balanced breakfast.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'vanilla almond',
+    tags: ['single', 'smooth', 'classic'],
+    shopifyHandle: 'vanilla-almond-noats',
+  },
+  {
+    id: 'pumpkin-spice-noats',
+    name: "Pumpkin Spice N\'Oats",
+    description:
+      'All the cozy flavor of pumpkin pie without the sugar. Pumpkin Spice N\'Oats is a seasonal favorite made for stable energy and satiety.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'pumpkin spice',
+    tags: ['single', 'seasonal', 'comfort'],
+    shopifyHandle: 'pumpkin-spice-noats',
+  },
+  {
+    id: 'daily-noats',
+    name: "DAILY N\'OATS",
+    description:
+      "Start your day with DAILY N\'OATS — a low-carb, high-fiber, superfood cereal made to support gut health, satiety, and stable blood sugar.",
+    price: 12.99,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: [
+      'high-protein',
+      'keto',
+      'dairy-free',
+      'sugar-free',
+      'vegan',
+      'no-preservatives',
+      'soy-free',
+    ],
+    allergens: ['nuts'],
+    flavor: 'assorted',
+    tags: ['hero', 'staple'],
+    shopifyHandle: 'daily-noats',
+  },
+  {
+    id: 'daily-noats-gift-card',
+    name: "DAILY N\'OATS GIFT CARD",
+    description:
+      'Treat someone (or yourself) to the gift of low-carb, gut-friendly breakfasts with the Daily N\'Oats Gift Card.',
+    price: 25,
+    netCarbs: 0,
+    protein: 0,
+    fiber: 0,
+    fat: 0,
+    calories: 0,
+    dietary: [],
+    allergens: [],
+    flavor: 'n/a',
+    tags: ['gift', 'digital'],
+    shopifyHandle: 'daily-noats-gift-card',
+  },
+  {
+    id: 'daily-noats-singles',
+    name: "DAILY N\'OATS SINGLES",
+    description:
+      'Are you curious about Daily N\'Oats but not ready to commit? Daily N\'Oats Singles let you try individual flavors that fit your taste and goals.',
+    price: 5.5,
+    netCarbs: 4,
+    protein: 12,
+    fiber: 10,
+    fat: 10,
+    calories: 250,
+    dietary: ['keto', 'gluten-free', 'high-fiber'],
+    allergens: ['nuts'],
+    flavor: 'assorted singles',
+    tags: ['sampler', 'entry', 'single-serve'],
+    shopifyHandle: 'daily-noats-singles',
   },
 ];
 
-function buildPrompt(profile) {
-  return `
-Create a personalized DailyNoats oatmeal nutrition plan.
-
-Customer Profile:
-${JSON.stringify(profile, null, 2)}
-
-Available Products:
-${productCatalog.map(p => `- ${p.name} (${p.sku}) best for: ${p.best_for.join(", ")}`).join("\n")}
-
-Return ONLY valid JSON in this structure:
-
-{
-  "plan_markdown": "markdown content here",
-  "recommended_products": [
-    { "sku": "SCO-001", "reason": "Why this product is recommended" }
-  ]
-}
-`;
-}
-
-app.post("/api/nutrition-plan", async (req, res) => {
-  try {
-    const messages = [
-      { role: "system", content: "Return ONLY valid JSON." },
-      { role: "user", content: buildPrompt(req.body) }
-    ];
-
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.4,
-    });
-
-    const raw = completion.choices[0].message.content;
-
-    let json;
-    try {
-      json = JSON.parse(raw);
-    } catch (err) {
-      return res.status(500).json({ error: "Invalid JSON returned by AI." });
-    }
-
-    res.json(json);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error." });
-  }
-});
-
-const port = process.env.PORT || 4000;
-app.listen(port, () => console.log("Server running on port", port));
+export default products;
