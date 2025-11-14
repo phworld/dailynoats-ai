@@ -122,7 +122,7 @@ const products = [
   },
   {
     id: 'daily-noats',
-    name: 'DAILY N'OATS',
+    name: "DAILY N'OATS",
     description: 'Start your day with DAILY N\'OATS! This low-carb, oatmeal alternative is packed with 20g of protein and heart-healthy fats from real coconuts , but with only 2g of net carbs and zero added sugar —makin',
     category: 'breakfast',
     price: 72.5,
@@ -133,7 +133,7 @@ const products = [
   },
   {
     id: 'daily-noats-gift-card',
-    name: 'DAILY N'OATS GIFT CARD',
+    name: "DAILY N'OATS GIFT CARD",
     description: 'Treat someone (or yourself!) to a nutritious start with a Daily N\'Oats Gift Card - perfect for any taste bud!',
     category: 'breakfast',
     price: 10.0,
@@ -143,7 +143,7 @@ const products = [
   },
   {
     id: 'daily-noats-singles',
-    name: 'DAILY N'OATS SINGLES',
+    name: "DAILY N'OATS SINGLES",
     description: 'Are you curious about Daily N\'Oats, but hesitant to commit to a bundle? Why not give a Daily N\'Oats Single a try? Note: Coupon or Promo codes do not apply to singles.',
     category: 'breakfast',
     price: 7.0,
@@ -323,7 +323,7 @@ const products = [
   },
   {
     id: '30-day-glp-bundle',
-    name: 'THE DAILY N'OATS GLP-1 BUNDLE',
+    name: "THE DAILY N'OATS GLP-1 BUNDLE",
     description: 'Jumpstart your wellness journey with the 30-Day Reset Bundle — our bestselling Daily N’Oats flavors in a convenient 30-pack bundle.',
     category: 'breakfast',
     price: 138.0,
@@ -413,4 +413,4 @@ const products = [
   }
 ];
 
-module.exports = products;
+export default products;
