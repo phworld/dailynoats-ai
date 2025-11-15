@@ -26,7 +26,9 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🔹 Helper: sync AI plan to Shopify (customer + metaobject + metafield)
+/* -------------------------------------------------------
+   HELPER: Sync AI plan to Shopify (optional)
+   ------------------------------------------------------- */
 async function syncPlanToShopify(email, plan_markdown, recommended_products) {
   try {
     if (!email) return;
@@ -42,7 +44,9 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
 
     // 1) Find or create customer by email
     const searchRes = await fetch(
-      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(email)}`,
+      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(
+        email
+      )}`,
       {
         headers: {
           "X-Shopify-Access-Token": token,
@@ -98,7 +102,15 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
       }),
     });
 
-    const metaData = await metaRes.json();
+    // Shopify might respond with errors or non-JSON if something is off
+    let metaData = null;
+    try {
+      metaData = await metaRes.json();
+    } catch (e) {
+      console.warn("Shopify metaobject response was not JSON:", e);
+      return;
+    }
+
     const metaobjectId = metaData?.metaobject?.id;
     if (!metaobjectId) {
       console.warn("Failed to create ai_plan metaobject:", metaData);
@@ -134,56 +146,73 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
   }
 }
 
-// 🔹 Helper: sync AI plan + products to MailerLite
+/* -------------------------------------------------------
+   HELPER: Sync AI plan to MailerLite (for email automation)
+   ------------------------------------------------------- */
 async function syncPlanToMailerLite(email, plan_markdown, recommended_products) {
   try {
     if (!email) return;
 
     const apiKey = process.env.MAILERLITE_API_KEY;
     const groupId = process.env.MAILERLITE_GROUP_ID;
-
     if (!apiKey || !groupId) {
       console.warn("MailerLite env vars missing, skipping MailerLite sync");
       return;
     }
 
-    // Build a simple HTML-ish product list for {$ai_products}
-    const productsHtml = (recommended_products || [])
-      .map((p) => {
-        const name = p.name || p.id;
-        const reason = p.reason || "";
-        return `<p><strong>${name}</strong><br>${reason}</p>`;
-      })
-      .join("\n");
+    // MailerLite custom field limit is 1024 chars.
+    // We'll keep it safely below that.
+    const MAX_LEN = 900;
 
-    // MailerLite (new API) upsert subscriber
-    // Docs pattern: POST https://connect.mailerlite.com/api/subscribers
+    let planShort = plan_markdown || "";
+    if (planShort.length > MAX_LEN) {
+      planShort = planShort.slice(0, MAX_LEN - 3) + "...";
+    }
+
+    // Create a compact summary of products: "Name: reason | Name: reason"
+    const productsSummary = (recommended_products || [])
+      .map(
+        (p) =>
+          `${p.name || p.id}: ${(p.reason || "").replace(/\s+/g, " ").trim()}`
+      )
+      .join(" | ");
+
+    let productsShort = productsSummary;
+    if (productsShort.length > MAX_LEN) {
+      productsShort = productsShort.slice(0, MAX_LEN - 3) + "...";
+    }
+
     const resp = await fetch("https://connect.mailerlite.com/api/subscribers", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         email,
         groups: [groupId],
         fields: {
-          ai_plan: plan_markdown || "",
-          ai_products: productsHtml || "",
+          ai_plan: planShort,      // <-- used as {$ai_plan} in MailerLite
+          ai_products: productsShort, // <-- used as {$ai_products}
         },
       }),
     });
 
     if (!resp.ok) {
       const text = await resp.text();
-      console.warn("MailerLite sync failed:", resp.status, text);
-    } else {
-      console.log("Synced AI plan to MailerLite for", email);
+      console.error("MailerLite sync failed:", resp.status, text);
+      return;
     }
+
+    console.log("Synced AI plan to MailerLite for", email);
   } catch (err) {
-    console.error("Failed to sync plan to MailerLite:", err);
+    console.error("MailerLite sync error:", err);
   }
 }
+
+/* -------------------------------------------------------
+   Prompt setup
+   ------------------------------------------------------- */
 
 // Build a Set of valid product IDs so we never recommend anything else
 const validProductIds = new Set(products.map((p) => p.id));
@@ -295,6 +324,10 @@ REQUIREMENTS:
   Please consult your healthcare provider for personalized recommendations."`;
 }
 
+/* -------------------------------------------------------
+   Main route
+   ------------------------------------------------------- */
+
 app.post("/api/nutrition-plan", async (req, res) => {
   try {
     const {
@@ -378,11 +411,11 @@ app.post("/api/nutrition-plan", async (req, res) => {
       };
     });
 
-    // 🔹 Push plan to Shopify (if configured)
-    syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
-
-    // 🔹 Push plan to MailerLite (if configured)
+    // 🔹 Push plan to MailerLite (for email)
     syncPlanToMailerLite(profile.email, plan_markdown, annotated_recommendations);
+
+    // 🔹 Optional: also push to Shopify (for on-site use)
+    syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
 
     // Respond to browser as before
     res.json({
