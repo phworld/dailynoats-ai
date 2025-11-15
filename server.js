@@ -13,6 +13,9 @@ import products from "./products_catalog.js";
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// 🔹 Central place for the Transform page URL
+const TRANSFORM_URL = "/pages/transform-your-mornings";
+
 app.use(cors());
 app.use(express.json());
 
@@ -421,10 +424,11 @@ app.post("/api/nutrition-plan", async (req, res) => {
     // Optional: also push to Shopify
     syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
 
-    // Respond to browser as before
+    // Respond to browser as before, PLUS transform page URL
     res.json({
       plan_markdown,
       recommended_products: annotated_recommendations,
+      transform_url: TRANSFORM_URL, // 🔹 front-end can use for "Transform My Mornings" CTA
     });
   } catch (err) {
     console.error("Server error:", err);
@@ -626,7 +630,11 @@ app.post("/api/recipes", async (req, res) => {
       };
     });
 
-    res.json({ recipes });
+    // Return recipes AND the transform page URL so the front-end can link to it
+    res.json({
+      recipes,
+      transform_url: TRANSFORM_URL, // 🔹 front-end on /pages/transform-your-mornings can use this if needed
+    });
   } catch (err) {
     console.error("Recipe API error:", err);
     res.status(500).json({
