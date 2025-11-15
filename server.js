@@ -26,7 +26,9 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🔹 Helper: sync AI plan to Shopify (customer + metaobject + metafield)
+/* ------------------------------------------------------------------
+   Helper: sync AI plan to Shopify (customer + metaobject + metafield)
+-------------------------------------------------------------------*/
 async function syncPlanToShopify(email, plan_markdown, recommended_products) {
   try {
     if (!email) return;
@@ -34,7 +36,7 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
     const store = process.env.SHOPIFY_STORE;
     const token = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
     if (!store || !token) {
-      console.warn("Shopify env vars missing, skipping sync");
+      console.warn("Shopify env vars missing, skipping Shopify sync");
       return;
     }
 
@@ -42,7 +44,9 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
 
     // 1) Find or create customer by email
     const searchRes = await fetch(
-      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(email)}`,
+      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(
+        email
+      )}`,
       {
         headers: {
           "X-Shopify-Access-Token": token,
@@ -128,11 +132,74 @@ async function syncPlanToShopify(email, plan_markdown, recommended_products) {
       }),
     });
 
-    console.log("Synced AI plan to Shopify for", email);
+    console.log("✅ Synced AI plan to Shopify for", email);
   } catch (err) {
-    console.error("Failed to sync plan to Shopify:", err);
+    console.error("❌ Failed to sync plan to Shopify:", err);
   }
 }
+
+/* ------------------------------------------------------------------
+   Helper: sync AI plan to MailerLite (subscriber + custom fields)
+-------------------------------------------------------------------*/
+async function syncPlanToMailerLite(
+  email,
+  plan_markdown,
+  recommended_products
+) {
+  try {
+    if (!email) return;
+
+    const apiKey = process.env.MAILERLITE_API_KEY;
+    const groupId = process.env.MAILERLITE_GROUP_ID;
+    if (!apiKey || !groupId) {
+      console.warn("MailerLite env vars missing, skipping MailerLite sync");
+      return;
+    }
+
+    // MailerLite API v2 (JSON API)
+    const url = "https://connect.mailerlite.com/api/subscribers";
+
+    // Trim to avoid absurdly long payloads
+    const planText = (plan_markdown || "").slice(0, 9000);
+    const productsJson = JSON.stringify(recommended_products || []).slice(
+      0,
+      9000
+    );
+
+    const body = {
+      email,
+      groups: [groupId],
+      fields: {
+        ai_plan_text: planText,
+        ai_products: productsJson,
+      },
+    };
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.warn("MailerLite sync failed:", resp.status, errText);
+      return;
+    }
+
+    console.log("✅ Synced AI plan to MailerLite for", email);
+  } catch (err) {
+    console.error("❌ Failed to sync plan to MailerLite:", err);
+  }
+}
+
+/* ------------------------------------------------------------------
+   Prompt & product catalog support
+-------------------------------------------------------------------*/
 
 // Build a Set of valid product IDs so we never recommend anything else
 const validProductIds = new Set(products.map((p) => p.id));
@@ -244,6 +311,10 @@ REQUIREMENTS:
   Please consult your healthcare provider for personalized recommendations."`;
 }
 
+/* ------------------------------------------------------------------
+   Main API route
+-------------------------------------------------------------------*/
+
 app.post("/api/nutrition-plan", async (req, res) => {
   try {
     const {
@@ -327,8 +398,9 @@ app.post("/api/nutrition-plan", async (req, res) => {
       };
     });
 
-    // 🔹 NEW: push plan to Shopify in the background
+    // 🔹 Push plan to Shopify & MailerLite in the background
     syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
+    syncPlanToMailerLite(profile.email, plan_markdown, annotated_recommendations);
 
     // Respond to browser as before
     res.json({
