@@ -3,6 +3,7 @@
 // - Uses products from products_catalog.js
 // - Only recommends real Daily N'Oats products
 // - Returns structured JSON: { plan_markdown, recommended_products }
+// - Also exposes /api/recipes for AI-generated Daily N'Oats recipes
 
 import express from "express";
 import cors from "cors";
@@ -161,7 +162,6 @@ async function syncPlanToMailerLite(email, plan_markdown, recommended_products) 
     }
 
     // MailerLite custom field limit is 1024 chars.
-    // We'll keep it safely below that.
     const MAX_LEN = 900;
 
     let planShort = plan_markdown || "";
@@ -192,8 +192,8 @@ async function syncPlanToMailerLite(email, plan_markdown, recommended_products) 
         email,
         groups: [groupId],
         fields: {
-          ai_plan: planShort,      // <-- used as {$ai_plan} in MailerLite
-          ai_products: productsShort, // <-- used as {$ai_products}
+          ai_plan: planShort, // {$ai_plan} in MailerLite
+          ai_products: productsShort, // {$ai_products}
         },
       }),
     });
@@ -211,13 +211,13 @@ async function syncPlanToMailerLite(email, plan_markdown, recommended_products) 
 }
 
 /* -------------------------------------------------------
-   Prompt setup
+   Prompt setup (shared)
    ------------------------------------------------------- */
 
 // Build a Set of valid product IDs so we never recommend anything else
 const validProductIds = new Set(products.map((p) => p.id));
 
-// Compact catalog summary for the prompt
+// Compact catalog summary for general plan prompt
 const CATALOG_SUMMARY = products
   .map((p) => {
     const dietary = p.dietary?.join(", ") || "none";
@@ -325,7 +325,7 @@ REQUIREMENTS:
 }
 
 /* -------------------------------------------------------
-   Main route
+   Nutrition plan route (quiz)
    ------------------------------------------------------- */
 
 app.post("/api/nutrition-plan", async (req, res) => {
@@ -411,10 +411,14 @@ app.post("/api/nutrition-plan", async (req, res) => {
       };
     });
 
-    // 🔹 Push plan to MailerLite (for email)
-    syncPlanToMailerLite(profile.email, plan_markdown, annotated_recommendations);
+    // Push plan to MailerLite (for email)
+    syncPlanToMailerLite(
+      profile.email,
+      plan_markdown,
+      annotated_recommendations
+    );
 
-    // 🔹 Optional: also push to Shopify (for on-site use)
+    // Optional: also push to Shopify
     syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
 
     // Respond to browser as before
@@ -432,6 +436,209 @@ app.post("/api/nutrition-plan", async (req, res) => {
     });
   }
 });
+
+/* =======================================================
+   AI RECIPE SYSTEM FOR DAILY N'OATS (/api/recipes)
+   ======================================================= */
+
+// Compact catalog summary specifically for recipes
+const RECIPE_CATALOG_SUMMARY = products
+  .map((p) => {
+    const dietary = p.dietary?.join(", ") || "none";
+    const flavor = p.flavor || "unspecified";
+
+    return `- id: ${p.id}
+  name: ${p.name}
+  flavor: ${flavor}
+  dietary: ${dietary}
+  netCarbs: ${p.netCarbs}g, protein: ${p.protein}g, fiber: ${p.fiber}g`;
+  })
+  .join("\n\n");
+
+function buildRecipeSystemPrompt() {
+  return `
+You are the AI recipe developer for Daily N'Oats, a low-carb, high-protein,
+blood-sugar-friendly breakfast brand.
+
+Your job is to create DELICIOUS, PRACTICAL RECIPES using ONLY Daily N'Oats products.
+
+PREPARATION RULES (IMPORTANT):
+- Do NOT say "just add water and enjoy".
+- Do NOT say "prepare clean water" or "clean water".
+- When describing how to make Daily N'Oats, always default to:
+  "Either add milk and let it sit overnight or cook it. We suggest cooking it."
+- You may optionally mention almond milk, oat milk, or other milk alternatives,
+  but the phrasing must always center on adding milk, not water.
+
+LANGUAGE RULES (IMPORTANT):
+- Do NOT refer to "oats" generically.
+- Always say "Daily N'Oats", "Daily N'Oats servings", or "Daily N'Oats cups".
+- For weekly prep, use phrases like:
+  "Portion your Daily N'Oats servings for the week" or
+  "Pre-portion your Daily N'Oats cups into containers for the week."
+
+PRODUCT RULES:
+- You may recommend ONLY products whose "id" appears in the catalog below.
+- You MUST NOT mention or recommend any other brands or generic products as the base.
+- You can add common toppings or mix-ins (berries, nuts, nut butters, seeds, yogurt, etc.)
+  but the core base must always be a Daily N'Oats product.
+
+DAILY N'OATS PRODUCT CATALOG:
+
+${RECIPE_CATALOG_SUMMARY}
+
+TONE:
+- Warm, encouraging, practical.
+- You do NOT give medical advice.
+- Recipes should feel approachable for busy people, GLP-1 users, and health-conscious customers.
+
+You will receive a JSON payload describing the customer's preferences.`;
+}
+
+function buildRecipeUserPrompt(payload) {
+  return `
+Create 1–3 Daily N'Oats recipes tailored for this customer.
+
+INPUT (JSON):
+${JSON.stringify(payload, null, 2)}
+
+TASK:
+- Design between 1 and 3 recipes.
+- Each recipe MUST:
+  - Use at least one Daily N'Oats product from "base_product_ids".
+  - Respect dietary preferences ("dietary") and flavor preferences ("flavors").
+  - Fit their "goal" and "prep_time".
+  - Have practical, numbered steps that a busy person can follow.
+  - Use the preparation wording:
+    "Either add milk and let it sit overnight or cook it. We suggest cooking it."
+
+OUTPUT FORMAT:
+Return ONLY valid JSON (no commentary) exactly in this structure:
+
+{
+  "recipes": [
+    {
+      "title": "string",
+      "description": "1–2 sentence description",
+      "base_products": ["product-id-from-catalog"],
+      "ingredients": [
+        {
+          "item": "ingredient name",
+          "amount": "quantity + unit",
+          "notes": "optional extra context (optional)"
+        }
+      ],
+      "steps": [
+        "Step 1...",
+        "Step 2...",
+        "Step 3..."
+      ],
+      "macros": {
+        "calories": number,
+        "netCarbs": number,
+        "protein": number,
+        "fat": number,
+        "fiber": number
+      },
+      "tags": ["weight loss", "keto", "glp1-friendly"],
+      "servings": number
+    }
+  ]
+}
+
+RULES:
+- "recipes" MUST be a JSON array (1–3 items).
+- Every "base_products" id MUST match one of the product ids in the catalog.
+- Steps MUST use the milk/overnight-or-cook phrasing when describing prep.
+- Do NOT embed JSON as a string; just return a JSON object.
+- Include the disclaimer sentence in the description of the LAST recipe:
+  "This recipe suggestion is for general information only and is not medical advice."`;
+}
+
+app.post("/api/recipes", async (req, res) => {
+  try {
+    const {
+      goal,
+      dietary,
+      flavors,
+      prep_time,
+      style,
+      base_product_ids,
+      servings,
+    } = req.body || {};
+
+    const payload = {
+      goal: goal || "general wellness",
+      dietary: Array.isArray(dietary) ? dietary : dietary ? [dietary] : [],
+      flavors: Array.isArray(flavors) ? flavors : flavors ? [flavors] : [],
+      prep_time: prep_time || "under 10 minutes",
+      style: style || "warm bowl",
+      base_product_ids:
+        Array.isArray(base_product_ids) && base_product_ids.length
+          ? base_product_ids
+          : products.map((p) => p.id), // if none provided, allow all
+      servings: servings || 1,
+    };
+
+    const systemPrompt = buildRecipeSystemPrompt();
+    const userPrompt = buildRecipeUserPrompt(payload);
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    const raw = completion.choices?.[0]?.message?.content;
+    if (!raw) {
+      throw new Error("No content returned from OpenAI for recipes");
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      console.error("Failed to parse JSON from recipe model:", raw);
+      throw new Error("Model did not return valid JSON for recipes.");
+    }
+
+    const recipes_raw = Array.isArray(parsed.recipes) ? parsed.recipes : [];
+
+    const validIds = new Set(products.map((p) => p.id));
+
+    const recipes = recipes_raw.map((r) => {
+      const base_products = Array.isArray(r.base_products)
+        ? r.base_products.filter((id) => validIds.has(id))
+        : [];
+
+      return {
+        title: r.title || "Daily N'Oats Recipe",
+        description: r.description || "",
+        base_products,
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+        steps: Array.isArray(r.steps) ? r.steps : [],
+        macros: r.macros || null,
+        tags: Array.isArray(r.tags) ? r.tags : [],
+        servings: r.servings || payload.servings || 1,
+      };
+    });
+
+    res.json({ recipes });
+  } catch (err) {
+    console.error("Recipe API error:", err);
+    res.status(500).json({
+      error: "Server error",
+      message: err.message || "Unknown error generating recipes",
+    });
+  }
+});
+
+/* -------------------------------------------------------
+   Start server
+   ------------------------------------------------------- */
 
 app.listen(PORT, () => {
   console.log(`Daily N'Oats AI server running on port ${PORT}`);
