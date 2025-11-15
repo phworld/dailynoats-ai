@@ -6,7 +6,7 @@
 // - Also exposes /api/recipes for AI-generated Daily N'Oats recipes
 
 import express from "express";
-import cors from "cors";
+import cors from "cors"; // (no longer used, but harmless if left here)
 import OpenAI from "openai";
 import products from "./products_catalog.js";
 
@@ -16,7 +16,33 @@ const PORT = process.env.PORT || 4000;
 // 🔹 Central place for the Transform page URL
 const TRANSFORM_URL = "/pages/transform-your-mornings";
 
-app.use(cors());
+// 🔹 CORS: allow Shopify storefront to talk to this API
+const allowedOrigins = [
+  "https://www.dailynoats.com",
+  "https://dailynoats.com",
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  // Handle preflight requests quickly
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
 app.use(express.json());
 
 if (!process.env.OPENAI_API_KEY) {
