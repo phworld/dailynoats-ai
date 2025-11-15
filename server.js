@@ -374,6 +374,8 @@ app.post("/api/nutrition-plan", async (req, res) => {
       throw new Error("No content returned from OpenAI");
     }
 
+    console.log("OpenAI nutrition-plan raw:", raw); // 🔍 debug log
+
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -414,21 +416,25 @@ app.post("/api/nutrition-plan", async (req, res) => {
       };
     });
 
-    // Push plan to MailerLite (for email)
+    // Push plan to MailerLite (for email) – fire-and-forget
     syncPlanToMailerLite(
       profile.email,
       plan_markdown,
       annotated_recommendations
-    );
+    ).catch((e) => console.error("MailerLite sync error:", e));
 
-    // Optional: also push to Shopify
-    syncPlanToShopify(profile.email, plan_markdown, annotated_recommendations);
+    // Optional: also push to Shopify – fire-and-forget
+    syncPlanToShopify(
+      profile.email,
+      plan_markdown,
+      annotated_recommendations
+    ).catch((e) => console.error("Shopify sync error:", e));
 
     // Respond to browser as before, PLUS transform page URL
     res.json({
       plan_markdown,
       recommended_products: annotated_recommendations,
-      transform_url: TRANSFORM_URL, // 🔹 front-end can use for "Transform My Mornings" CTA
+      transform_url: TRANSFORM_URL, // front-end can use for "Transform My Mornings" CTA
     });
   } catch (err) {
     console.error("Server error:", err);
@@ -601,6 +607,8 @@ app.post("/api/recipes", async (req, res) => {
       throw new Error("No content returned from OpenAI for recipes");
     }
 
+    console.log("OpenAI recipes raw:", raw); // 🔍 debug log for recipes
+
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -633,7 +641,7 @@ app.post("/api/recipes", async (req, res) => {
     // Return recipes AND the transform page URL so the front-end can link to it
     res.json({
       recipes,
-      transform_url: TRANSFORM_URL, // 🔹 front-end on /pages/transform-your-mornings can use this if needed
+      transform_url: TRANSFORM_URL,
     });
   } catch (err) {
     console.error("Recipe API error:", err);
