@@ -1,687 +1,629 @@
-// server.js
-// Daily N'Oats AI Nutrition Planner backend
-// - Uses products from products_catalog.js
-// - Only recommends real Daily N'Oats products
-// - Returns structured JSON: { plan_markdown, recommended_products }
-// - Also exposes /api/recipes for AI-generated Daily N'Oats recipes
+<div class="page-width dn-recipe-converter" style="max-width:900px; margin:0 auto;">
+  <h1>Daily N'Oats AI Recipe Converter</h1>
+  <p>
+    Paste any oatmeal recipe, drop in a photo or PDF, and our AI will transform it
+    into a <strong>low-carb Daily N'Oats version</strong> with macros, chef notes,
+    and carb savings.
+  </p>
 
-import express from "express";
-import cors from "cors"; // (no longer used, but harmless if left here)
-import OpenAI from "openai";
-import products from "./products_catalog.js";
+  <!-- INPUT MODE SELECTOR -->
+  <div style="margin:1.5rem 0; display:flex; gap:8px; flex-wrap:wrap;">
+    <button type="button" data-mode="text" class="dn-mode-btn dn-mode-btn--active">
+      Paste Recipe Text
+    </button>
+    <button type="button" data-mode="url" class="dn-mode-btn">
+      Import from URL
+    </button>
+    <button type="button" data-mode="upload" class="dn-mode-btn">
+      Upload Image / PDF
+    </button>
+  </div>
 
-const app = express();
-const PORT = process.env.PORT || 4000;
+  <!-- TEXT INPUT -->
+  <div id="dn-input-text" class="dn-input-panel">
+    <label><strong>Paste your recipe:</strong></label>
+    <textarea id="dn-recipe-text" rows="8" style="width:100%; border-radius:8px; padding:10px; border:1px solid #d3ddc9;"
+      placeholder="Paste the full recipe here: title, ingredients, instructions, servings, etc."></textarea>
+  </div>
 
-// 🔹 Central place for the Transform page URL
-const TRANSFORM_URL = "/pages/transform-your-mornings";
+  <!-- URL INPUT -->
+  <div id="dn-input-url" class="dn-input-panel" style="display:none;">
+    <label><strong>Recipe URL:</strong></label>
+    <input id="dn-recipe-url" type="url" style="width:100%; border-radius:8px; padding:10px; border:1px solid #d3ddc9;"
+      placeholder="https://example.com/your-favorite-oatmeal-recipe">
+    <p style="font-size:0.9rem; color:#66705e;">
+      We'll attempt to extract just the recipe (title, ingredients, instructions).
+    </p>
+  </div>
 
-// 🔹 CORS: allow Shopify storefront to talk to this API
-const allowedOrigins = [
-  "https://www.dailynoats.com",
-  "https://dailynoats.com",
-];
+  <!-- UPLOAD (IMAGE/PDF) -->
+  <div id="dn-input-upload" class="dn-input-panel" style="display:none;">
+    <label><strong>Upload recipe image(s) or PDF:</strong></label>
+    <div id="dn-dropzone"
+      style="
+        margin-top:8px;
+        border:2px dashed #c1cfb4;
+        border-radius:12px;
+        padding:20px;
+        text-align:center;
+        cursor:pointer;
+        background:#f8faf5;
+      ">
+      <p style="margin:0 0 4px;">📎 Drag & drop recipe image(s) or a PDF here</p>
+      <p style="margin:0; font-size:0.9rem; color:#66705e;">
+        Accepts JPG, PNG, PDF. You can upload <strong>multiple images</strong> for multi-page recipes.
+      </p>
+    </div>
+    <input id="dn-file-input" type="file" accept="image/*,application/pdf" multiple style="display:none;">
+    <div id="dn-upload-preview" style="margin-top:1rem;"></div>
+  </div>
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+  <!-- DIETARY + PREFS -->
+  <div style="margin-top:1.5rem;">
+    <h3>Optional: Tailor the conversion</h3>
+    <div style="display:flex; flex-wrap:wrap; gap:24px;">
+      <div>
+        <p style="margin-bottom:4px;"><strong>Dietary restrictions:</strong></p>
+        <label><input type="checkbox" name="dn-diet" value="vegan"> Vegan</label><br>
+        <label><input type="checkbox" name="dn-diet" value="dairy-free"> Dairy-free</label><br>
+        <label><input type="checkbox" name="dn-diet" value="nut-free"> Nut-free</label><br>
+        <label><input type="checkbox" name="dn-diet" value="keto"> Strict keto</label><br>
+      </div>
+      <div>
+        <p style="margin-bottom:4px;"><strong>Preferred sweetener:</strong></p>
+        <select id="dn-pref-sweetener" style="min-width:200px;">
+          <option value="">No strong preference</option>
+          <option value="erythritol">Erythritol</option>
+          <option value="monk-fruit">Monk fruit</option>
+          <option value="stevia">Stevia</option>
+        </select>
+        <p style="margin:0.5rem 0 4px;"><strong>Preferred milk type:</strong></p>
+        <select id="dn-pref-milk" style="min-width:200px;">
+          <option value="">No strong preference</option>
+          <option value="almond">Unsweetened almond milk</option>
+          <option value="coconut">Unsweetened coconut milk</option>
+          <option value="cashew">Unsweetened cashew milk</option>
+        </select>
+      </div>
+    </div>
+  </div>
 
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
+  <!-- PROGRESS STEPS -->
+  <div style="margin-top:1.5rem; padding:12px 16px; border-radius:12px; background:#f5f8f2;">
+    <div style="font-weight:600; margin-bottom:8px;">Conversion progress</div>
+    <ol id="dn-progress-list" style="padding-left:1.2rem; margin:0; font-size:0.95rem;">
+      <li data-step="intake">1. Intake & recipe understanding</li>
+      <li data-step="analysis">2. Analyze carbs & swap opportunities</li>
+      <li data-step="conversion">3. Convert to Daily N'Oats low-carb version</li>
+      <li data-step="nutrition">4. Estimate nutrition & carb savings</li>
+      <li data-step="format">5. Format for easy cooking</li>
+    </ol>
+  </div>
 
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  <!-- SUBMIT BUTTON + STATUS -->
+  <div style="margin-top:1.5rem;">
+    <button id="dn-convert-btn"
+      style="
+        background:#2c5f2d;
+        color:#fff;
+        border:none;
+        border-radius:999px;
+        padding:10px 24px;
+        font-weight:600;
+        cursor:pointer;
+      ">
+      Convert My Recipe to Daily N'Oats
+    </button>
+    <span id="dn-status-text" style="margin-left:10px; font-size:0.9rem; color:#66705e;"></span>
+  </div>
 
-  // Handle preflight requests quickly
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+  <!-- RESULTS -->
+  <div id="dn-results" style="margin-top:2rem; display:none;">
+    <h2>Converted Recipe</h2>
+    <div id="dn-converted"></div>
 
-  next();
-});
+    <h2 style="margin-top:2rem;">Original Recipe (Structured)</h2>
+    <div id="dn-original"></div>
 
-app.use(express.json());
+    <h2 style="margin-top:2rem;">Why This Swap Works</h2>
+    <div id="dn-meta"></div>
 
-if (!process.env.OPENAI_API_KEY) {
-  console.warn(
-    "WARNING: OPENAI_API_KEY is not set. Start the server with:\n" +
-      'OPENAI_API_KEY="sk-..." npm start'
-  );
-}
+    <div style="margin-top:2rem; padding:16px 18px; border-radius:12px; background:#f8faf5; border:1px solid #d3ddc9;">
+      <h3 style="margin-top:0;">Stock Up on Daily N'Oats</h3>
+      <p style="margin-bottom:0.5rem;">
+        Love this conversion? Keep your pantry ready so you can make it anytime.
+      </p>
+      <a href="/products/fab-four-bundle-30-pack"
+        style="
+          display:inline-block;
+          background:#2c5f2d;
+          color:#fff;
+          padding:8px 18px;
+          border-radius:999px;
+          text-decoration:none;
+          font-weight:600;
+        ">
+        Shop Fab Four Bundle (30 pack)
+      </a>
+    </div>
+  </div>
+</div>
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+<script>
+(function() {
+  // --- DOM refs ---
+  const modeButtons = document.querySelectorAll(".dn-mode-btn");
+  const inputTextPanel = document.getElementById("dn-input-text");
+  const inputUrlPanel = document.getElementById("dn-input-url");
+  const inputUploadPanel = document.getElementById("dn-input-upload");
 
-/* -------------------------------------------------------
-   HELPER: Sync AI plan to Shopify (optional)
-   ------------------------------------------------------- */
-async function syncPlanToShopify(email, plan_markdown, recommended_products) {
-  try {
-    if (!email) return;
+  const textarea = document.getElementById("dn-recipe-text");
+  const urlInput = document.getElementById("dn-recipe-url");
+  const dropzone = document.getElementById("dn-dropzone");
+  const fileInput = document.getElementById("dn-file-input");
+  const uploadPreview = document.getElementById("dn-upload-preview");
 
-    const store = process.env.SHOPIFY_STORE;
-    const token = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-    if (!store || !token) {
-      console.warn("Shopify env vars missing, skipping sync");
-      return;
-    }
+  const convertBtn = document.getElementById("dn-convert-btn");
+  const statusText = document.getElementById("dn-status-text");
+  const progressList = document.getElementById("dn-progress-list");
 
-    const baseUrl = `https://${store}.myshopify.com/admin/api/2024-10`;
+  const resultsSection = document.getElementById("dn-results");
+  const convertedEl = document.getElementById("dn-converted");
+  const originalEl = document.getElementById("dn-original");
+  const metaEl = document.getElementById("dn-meta");
 
-    // 1) Find or create customer by email
-    const searchRes = await fetch(
-      `${baseUrl}/customers/search.json?query=email:${encodeURIComponent(
-        email
-      )}`,
-      {
-        headers: {
-          "X-Shopify-Access-Token": token,
-          "Content-Type": "application/json",
-        },
+  const prefSweetener = document.getElementById("dn-pref-sweetener");
+  const prefMilk = document.getElementById("dn-pref-milk");
+
+  let currentMode = "text";
+  let selectedFiles = []; // File objects
+
+  function setMode(mode) {
+    currentMode = mode;
+    inputTextPanel.style.display = mode === "text" ? "block" : "none";
+    inputUrlPanel.style.display = mode === "url" ? "block" : "none";
+    inputUploadPanel.style.display = mode === "upload" ? "block" : "none";
+
+    modeButtons.forEach(btn => {
+      const isActive = btn.getAttribute("data-mode") === mode;
+      if (isActive) {
+        btn.classList.add("dn-mode-btn--active");
+      } else {
+        btn.classList.remove("dn-mode-btn--active");
       }
+    });
+  }
+
+  modeButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-mode");
+      setMode(mode);
+    });
+  });
+
+  // Simple styling for active mode button
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .dn-mode-btn {
+      background:#f2f6ec;
+      border-radius:999px;
+      border:1px solid #c1cfb4;
+      padding:6px 14px;
+      cursor:pointer;
+      font-size:0.9rem;
+    }
+    .dn-mode-btn--active {
+      background:#2c5f2d;
+      color:#fff;
+      border-color:#2c5f2d;
+    }
+    .dn-progress-done { color:#2c5f2d; font-weight:600; }
+    .dn-progress-active { color:#2c5f2d; font-weight:600; text-decoration:underline; }
+  `;
+  document.head.appendChild(styleEl);
+
+  function resetProgress() {
+    progressList.querySelectorAll("li").forEach(li => {
+      li.classList.remove("dn-progress-done", "dn-progress-active");
+      li.style.opacity = "1";
+    });
+  }
+
+  function setProgress(stepKey) {
+    const steps = ["intake", "analysis", "conversion", "nutrition", "format"];
+    progressList.querySelectorAll("li").forEach(li => {
+      const key = li.getAttribute("data-step");
+      if (steps.indexOf(key) < steps.indexOf(stepKey)) {
+        li.classList.add("dn-progress-done");
+        li.classList.remove("dn-progress-active");
+      } else if (key === stepKey) {
+        li.classList.add("dn-progress-active");
+      } else {
+        li.classList.remove("dn-progress-done", "dn-progress-active");
+      }
+    });
+  }
+
+  function setStatus(msg) {
+    statusText.textContent = msg || "";
+  }
+
+  // ---- Upload handling ----
+  function renderFilePreview() {
+    uploadPreview.innerHTML = "";
+    if (!selectedFiles.length) return;
+
+    selectedFiles.forEach(file => {
+      const wrapper = document.createElement("div");
+      wrapper.style.marginBottom = "8px";
+      wrapper.style.display = "flex";
+      wrapper.style.alignItems = "center";
+      wrapper.style.gap = "8px";
+
+      if (file.type.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.style.width = "60px";
+        img.style.height = "60px";
+        img.style.objectFit = "cover";
+        img.style.borderRadius = "8px";
+        const reader = new FileReader();
+        reader.onload = e => { img.src = e.target.result; };
+        reader.readAsDataURL(file);
+        wrapper.appendChild(img);
+      } else {
+        const icon = document.createElement("div");
+        icon.textContent = "📄";
+        icon.style.fontSize = "2rem";
+        wrapper.appendChild(icon);
+      }
+
+      const label = document.createElement("span");
+      label.textContent = file.name;
+      label.style.fontSize = "0.9rem";
+
+      wrapper.appendChild(label);
+      uploadPreview.appendChild(wrapper);
+    });
+  }
+
+  function handleFiles(files) {
+    selectedFiles = Array.from(files || []);
+    renderFilePreview();
+  }
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", e => handleFiles(e.target.files));
+
+  ["dragenter", "dragover"].forEach(ev => {
+    dropzone.addEventListener(ev, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.background = "#eef4e6";
+      dropzone.style.borderColor = "#2c5f2d";
+    });
+  });
+
+  ["dragleave", "drop"].forEach(ev => {
+    dropzone.addEventListener(ev, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.background = "#f8faf5";
+      dropzone.style.borderColor = "#c1cfb4";
+    });
+  });
+
+  dropzone.addEventListener("drop", e => {
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length) {
+      handleFiles(dt.files);
+    }
+  });
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result || "";
+        const parts = result.split(",");
+        resolve(parts.length > 1 ? parts[1] : "");
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function collectDietaryRestrictions() {
+    return Array.from(document.querySelectorAll("input[name='dn-diet']:checked")).map(
+      i => i.value
     );
-    const searchData = await searchRes.json();
-    let customer = searchData.customers?.[0];
-
-    if (!customer) {
-      // Create customer if not found
-      const createRes = await fetch(`${baseUrl}/customers.json`, {
-        method: "POST",
-        headers: {
-          "X-Shopify-Access-Token": token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customer: {
-            email,
-            tags: "AI_Nutrition_Quiz",
-          },
-        }),
-      });
-      const createData = await createRes.json();
-      customer = createData.customer;
-    }
-
-    if (!customer) {
-      console.warn("Could not create or find customer for email:", email);
-      return;
-    }
-
-    // 2) Create metaobject instance of type ai_plan
-    const metaRes = await fetch(`${baseUrl}/metaobjects/ai_plan.json`, {
-      method: "POST",
-      headers: {
-        "X-Shopify-Access-Token": token,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        metaobject: {
-          type: "ai_plan",
-          fields: [
-            { key: "plan_text", value: plan_markdown || "" },
-            {
-              key: "products",
-              value: JSON.stringify(recommended_products || []),
-            },
-          ],
-        },
-      }),
-    });
-
-    // Shopify might respond with errors or non-JSON if something is off
-    let metaData = null;
-    try {
-      metaData = await metaRes.json();
-    } catch (e) {
-      console.warn("Shopify metaobject response was not JSON:", e);
-      return;
-    }
-
-    const metaobjectId = metaData?.metaobject?.id;
-    if (!metaobjectId) {
-      console.warn("Failed to create ai_plan metaobject:", metaData);
-      return;
-    }
-
-    // 3) Attach metaobject to customer via metafield ai.plan
-    await fetch(`${baseUrl}/customers/${customer.id}.json`, {
-      method: "PUT",
-      headers: {
-        "X-Shopify-Access-Token": token,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customer: {
-          id: customer.id,
-          tags: `${customer.tags || ""},AI_Nutrition_Quiz`.trim(),
-          metafields: [
-            {
-              namespace: "ai",
-              key: "plan",
-              type: "metaobject_reference",
-              value: metaobjectId,
-            },
-          ],
-        },
-      }),
-    });
-
-    console.log("Synced AI plan to Shopify for", email);
-  } catch (err) {
-    console.error("Failed to sync plan to Shopify:", err);
   }
-}
 
-/* -------------------------------------------------------
-   HELPER: Sync AI plan to MailerLite (for email automation)
-   ------------------------------------------------------- */
-async function syncPlanToMailerLite(email, plan_markdown, recommended_products) {
-  try {
-    if (!email) return;
-
-    const apiKey = process.env.MAILERLITE_API_KEY;
-    const groupId = process.env.MAILERLITE_GROUP_ID;
-    if (!apiKey || !groupId) {
-      console.warn("MailerLite env vars missing, skipping MailerLite sync");
+  function renderOriginalRecipe(data) {
+    if (!data) {
+      originalEl.innerHTML = "<p>No structured recipe extracted.</p>";
       return;
     }
 
-    // MailerLite custom field limit is 1024 chars.
-    const MAX_LEN = 900;
+    const ingHtml = (data.ingredients || [])
+      .map(i => `<li>${i.amount ? `<strong>${i.amount}</strong> ` : ""}${i.item || ""}${i.notes ? ` <em>(${i.notes})</em>` : ""}</li>`)
+      .join("");
 
-    let planShort = plan_markdown || "";
-    if (planShort.length > MAX_LEN) {
-      planShort = planShort.slice(0, MAX_LEN - 3) + "...";
-    }
+    const stepsHtml = (data.steps || [])
+      .map((s, idx) => `<li><strong>Step ${idx + 1}:</strong> ${s}</li>`)
+      .join("");
 
-    // Create a compact summary of products: "Name: reason | Name: reason"
-    const productsSummary = (recommended_products || [])
-      .map(
-        (p) =>
-          `${p.name || p.id}: ${(p.reason || "").replace(/\s+/g, " ").trim()}`
-      )
-      .join(" | ");
+    const nut = data.nutrition_original || {};
 
-    let productsShort = productsSummary;
-    if (productsShort.length > MAX_LEN) {
-      productsShort = productsShort.slice(0, MAX_LEN - 3) + "...";
-    }
-
-    const resp = await fetch("https://connect.mailerlite.com/api/subscribers", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        email,
-        groups: [groupId],
-        fields: {
-          ai_plan: planShort, // {$ai_plan} in MailerLite
-          ai_products: productsShort, // {$ai_products}
-        },
-      }),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      console.error("MailerLite sync failed:", resp.status, text);
-      return;
-    }
-
-    console.log("Synced AI plan to MailerLite for", email);
-  } catch (err) {
-    console.error("MailerLite sync error:", err);
-  }
-}
-
-/* -------------------------------------------------------
-   Prompt setup (shared)
-   ------------------------------------------------------- */
-
-// Build a Set of valid product IDs so we never recommend anything else
-const validProductIds = new Set(products.map((p) => p.id));
-
-// Compact catalog summary for general plan prompt
-const CATALOG_SUMMARY = products
-  .map((p) => {
-    const dietary = p.dietary?.join(", ") || "none";
-    const allergens = p.allergens?.join(", ") || "none";
-    const flavor = p.flavor || "unspecified";
-
-    return `- id: ${p.id}
-  name: ${p.name}
-  price: $${p.price}
-  netCarbs: ${p.netCarbs}g, protein: ${p.protein}g, fiber: ${p.fiber}g
-  flavor: ${flavor}
-  dietary: ${dietary}
-  allergens: ${allergens}`;
-  })
-  .join("\n\n");
-
-function buildSystemPrompt() {
-  return `
-You are the AI nutrition assistant for Daily N'Oats, a low-carb, high-protein,
-blood-sugar-friendly breakfast brand.
-
-You design simple, realistic breakfast routines using ONLY Daily N'Oats products.
-
-PREPARATION RULES (IMPORTANT):
-- Do NOT say "just add water and enjoy".
-- Do NOT say "prepare clean water" or "clean water".
-- When describing how to make Daily N'Oats, default to:
-  "Either add milk and let it sit overnight or cook it. We suggest cooking it."
-- You may optionally mention almond milk, oat milk, or other milk alternatives,
-  but the phrasing must always center on adding milk, not water.
-
-LANGUAGE RULES (IMPORTANT):
-- Do NOT refer to "oats" generically.
-- Always say "Daily N'Oats", "Daily N'Oats servings", or "Daily N'Oats cups".
-- For weekly prep, prefer phrases like:
-  "Portion your Daily N'Oats servings for the week" or
-  "Pre-portion your Daily N'Oats cups into containers for the week."
-
-DAILY N'OATS PRODUCT CATALOG (SOURCE OF TRUTH):
-
-${CATALOG_SUMMARY}
-
-STRICT RULES:
-- You may recommend ONLY products whose "id" appears in the catalog above.
-- You MUST NOT mention or recommend any other brands or generic items
-  (for example: do NOT mention "Classic Steel Cut Oats", "SCO-001",
-  or any product not listed in the catalog).
-- When you talk about a product, use its catalog name (e.g., "30-DAY RESET BUNDLE",
-  "Naked N'Oats", "Daily N'Oats 6-Pack").
-- Consider dietary preferences, allergens, health goals, and convenience.
-- Favor bundles (e.g., 30-day reset or variety bundles) when the customer wants structure.
-- For GLP-1 / weight loss / diabetes / blood sugar goals, prioritize:
-  - 30-DAY RESET BUNDLE (weight-loss-bundle)
-  - THE DAILY N'OATS GLP-1 BUNDLE (30-day-glp-bundle)
-  - other high-protein, keto, sugar-free, gluten-free products.
-- If a product contains nuts, avoid it when the customer indicates nut allergy.
-
-Tone: warm, encouraging, practical. You do NOT give medical advice.
-You always include a short disclaimer that the plan is general information only.`;
-}
-
-function buildUserPrompt(profile) {
-  return `
-Create a personalized Daily N'Oats breakfast plan for this customer.
-
-CUSTOMER PROFILE (JSON):
-${JSON.stringify(profile, null, 2)}
-
-TASK:
-1. Design a clear, easy-to-follow Daily N'Oats routine for 7–30 days.
-2. Tie recommendations explicitly to Daily N'Oats products from the catalog by id.
-3. Take into account:
-   - goal (weight loss, GLP-1 support, gut health, energy, etc.)
-   - dietary restrictions (keto, vegan, gluten-free, dairy-free, etc.)
-   - health conditions (e.g., diabetes, pre-diabetes, high cholesterol)
-   - activity_level (sedentary, moderately active, very active)
-   - timing (breakfast, pre-workout, post-workout, snack)
-   - flavor preferences
-   - prep_time and convenience
-4. Prefer a small number of core products that the customer can use consistently,
-   with optional variety suggestions.
-
-OUTPUT FORMAT:
-Return ONLY valid JSON (no markdown, no extra commentary) in this exact structure:
-
-{
-  "plan_markdown": "string, a well-formatted Markdown plan that can be rendered on a web page",
-  "recommended_products": [
-    {
-      "id": "product-id-from-catalog",
-      "reason": "one or two short sentences explaining why this product is a good fit"
-    }
-  ]
-}
-
-REQUIREMENTS:
-- "recommended_products" must contain between 2 and 6 items.
-- Every "id" MUST match one of the product ids in the catalog.
-- In "plan_markdown", mention the products by their names (not just ids).
-- DO NOT embed JSON in the markdown. "recommended_products" must be a real JSON array.
-- Include a short weekly prep guide and guidance for the first 2–4 weeks.
-- End "plan_markdown" with a short disclaimer:
-  "This plan is for general information only and is not medical advice.
-  Please consult your healthcare provider for personalized recommendations."`;
-}
-
-/* -------------------------------------------------------
-   Nutrition plan route (quiz)
-   ------------------------------------------------------- */
-
-app.post("/api/nutrition-plan", async (req, res) => {
-  try {
-    const {
-      email,
-      goal,
-      restrictions,
-      health_conditions,
-      activity_level,
-      timing,
-      flavors,
-      prep_time,
-      priority,
-    } = req.body || {};
-
-    const profile = {
-      email: email || null,
-      goal: goal || null,
-      restrictions: restrictions || [],
-      health_conditions: health_conditions || [],
-      activity_level: activity_level || null,
-      timing: timing || [],
-      flavors: flavors || [],
-      prep_time: prep_time || null,
-      priority: priority || null,
-    };
-
-    const systemPrompt = buildSystemPrompt();
-    const userPrompt = buildUserPrompt(profile);
-
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
-
-    const raw = completion.choices?.[0]?.message?.content;
-    if (!raw) {
-      throw new Error("No content returned from OpenAI");
-    }
-
-    console.log("OpenAI nutrition-plan raw:", raw); // 🔍 debug log
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      console.error("Failed to parse JSON from model:", raw);
-      throw new Error("Model did not return valid JSON.");
-    }
-
-    const plan_markdown = parsed.plan_markdown || "";
-    const recommended_products_raw = Array.isArray(parsed.recommended_products)
-      ? parsed.recommended_products
-      : [];
-
-    // Filter & sanitize recommended products
-    const recommended_products = recommended_products_raw
-      .filter(
-        (item) =>
-          item &&
-          typeof item.id === "string" &&
-          validProductIds.has(item.id.trim())
-      )
-      .map((item) => ({
-        id: item.id.trim(),
-        reason: String(item.reason || "").trim(),
-      }));
-
-    // Attach extra product metadata
-    const annotated_recommendations = recommended_products.map((item) => {
-      const product = products.find((p) => p.id === item.id);
-      return {
-        ...item,
-        name: product?.name || item.id,
-        price: product?.price ?? null,
-        dietary: product?.dietary ?? null,
-        netCarbs: product?.netCarbs ?? null,
-        protein: product?.protein ?? null,
-        fiber: product?.fiber ?? null,
-      };
-    });
-
-    // Push plan to MailerLite (for email) – fire-and-forget
-    syncPlanToMailerLite(
-      profile.email,
-      plan_markdown,
-      annotated_recommendations
-    ).catch((e) => console.error("MailerLite sync error:", e));
-
-    // Optional: also push to Shopify – fire-and-forget
-    syncPlanToShopify(
-      profile.email,
-      plan_markdown,
-      annotated_recommendations
-    ).catch((e) => console.error("Shopify sync error:", e));
-
-    // Respond to browser as before, PLUS transform page URL
-    res.json({
-      plan_markdown,
-      recommended_products: annotated_recommendations,
-      transform_url: TRANSFORM_URL, // front-end can use for "Transform My Mornings" CTA
-    });
-  } catch (err) {
-    console.error("Server error:", err);
-    const message =
-      err?.response?.data?.error?.message || err.message || "Unknown error";
-    res.status(500).json({
-      error: "Server error",
-      message,
-    });
-  }
-});
-
-/* =======================================================
-   AI RECIPE SYSTEM FOR DAILY N'OATS (/api/recipes)
-   ======================================================= */
-
-// Compact catalog summary specifically for recipes
-const RECIPE_CATALOG_SUMMARY = products
-  .map((p) => {
-    const dietary = p.dietary?.join(", ") || "none";
-    const flavor = p.flavor || "unspecified";
-
-    return `- id: ${p.id}
-  name: ${p.name}
-  flavor: ${flavor}
-  dietary: ${dietary}
-  netCarbs: ${p.netCarbs}g, protein: ${p.protein}g, fiber: ${p.fiber}g`;
-  })
-  .join("\n\n");
-
-function buildRecipeSystemPrompt() {
-  return `
-You are the AI recipe developer for Daily N'Oats, a low-carb, high-protein,
-blood-sugar-friendly breakfast brand.
-
-Your job is to create DELICIOUS, PRACTICAL RECIPES using ONLY Daily N'Oats products.
-
-PREPARATION RULES (IMPORTANT):
-- Do NOT say "just add water and enjoy".
-- Do NOT say "prepare clean water" or "clean water".
-- When describing how to make Daily N'Oats, always default to:
-  "Either add milk and let it sit overnight or cook it. We suggest cooking it."
-- You may optionally mention almond milk, oat milk, or other milk alternatives,
-  but the phrasing must always center on adding milk, not water.
-
-LANGUAGE RULES (IMPORTANT):
-- Do NOT refer to "oats" generically.
-- Always say "Daily N'Oats", "Daily N'Oats servings", or "Daily N'Oats cups".
-- For weekly prep, use phrases like:
-  "Portion your Daily N'Oats servings for the week" or
-  "Pre-portion your Daily N'Oats cups into containers for the week."
-
-PRODUCT RULES:
-- You may recommend ONLY products whose "id" appears in the catalog below.
-- You MUST NOT mention or recommend any other brands or generic products as the base.
-- You can add common toppings or mix-ins (berries, nuts, nut butters, seeds, yogurt, etc.)
-  but the core base must always be a Daily N'Oats product.
-
-DAILY N'OATS PRODUCT CATALOG:
-
-${RECIPE_CATALOG_SUMMARY}
-
-TONE:
-- Warm, encouraging, practical.
-- You do NOT give medical advice.
-- Recipes should feel approachable for busy people, GLP-1 users, and health-conscious customers.
-
-You will receive a JSON payload describing the customer's preferences.`;
-}
-
-function buildRecipeUserPrompt(payload) {
-  return `
-Create 1–3 Daily N'Oats recipes tailored for this customer.
-
-INPUT (JSON):
-${JSON.stringify(payload, null, 2)}
-
-TASK:
-- Design between 1 and 3 recipes.
-- Each recipe MUST:
-  - Use at least one Daily N'Oats product from "base_product_ids".
-  - Respect dietary preferences ("dietary") and flavor preferences ("flavors").
-  - Fit their "goal" and "prep_time".
-  - Have practical, numbered steps that a busy person can follow.
-  - Use the preparation wording:
-    "Either add milk and let it sit overnight or cook it. We suggest cooking it."
-
-OUTPUT FORMAT:
-Return ONLY valid JSON (no commentary) exactly in this structure:
-
-{
-  "recipes": [
-    {
-      "title": "string",
-      "description": "1–2 sentence description",
-      "base_products": ["product-id-from-catalog"],
-      "ingredients": [
-        {
-          "item": "ingredient name",
-          "amount": "quantity + unit",
-          "notes": "optional extra context (optional)"
+    originalEl.innerHTML = `
+      <div style="border:1px solid #e0e7db; border-radius:12px; padding:14px 16px;">
+        <h3 style="margin-top:0;">${data.title || "Original Recipe"}</h3>
+        ${data.description ? `<p>${data.description}</p>` : ""}
+        <p style="font-size:0.9rem; color:#66705e;">
+          ⏱️ Prep: ${data.prep_time || "n/a"} &nbsp; | &nbsp;
+          🍳 Cook: ${data.cook_time || "n/a"} &nbsp; | &nbsp;
+          🍽️ Servings: ${data.servings || "n/a"}
+        </p>
+        <h4>Ingredients</h4>
+        <ul>${ingHtml || "<li>(not detected)</li>"}</ul>
+        <h4>Instructions</h4>
+        <ol>${stepsHtml || "<li>(not detected)</li>"}</ol>
+        ${
+          nut && (nut.calories || nut.net_carbs)
+            ? `
+        <h4>Original Nutrition (approx.)</h4>
+        <p style="font-size:0.9rem;">
+          Calories: ${nut.calories ?? "n/a"} &nbsp; | &nbsp;
+          Net carbs: ${nut.net_carbs ?? "n/a"}g
+        </p>
+        `
+            : ""
         }
-      ],
-      "steps": [
-        "Step 1...",
-        "Step 2...",
-        "Step 3..."
-      ],
-      "macros": {
-        "calories": number,
-        "netCarbs": number,
-        "protein": number,
-        "fat": number,
-        "fiber": number
-      },
-      "tags": ["weight loss", "keto", "glp1-friendly"],
-      "servings": number
-    }
-  ]
-}
-
-RULES:
-- "recipes" MUST be a JSON array (1–3 items).
-- Every "base_products" id MUST match one of the product ids in the catalog.
-- Steps MUST use the milk/overnight-or-cook phrasing when describing prep.
-- Do NOT embed JSON as a string; just return a JSON object.
-- Include the disclaimer sentence in the description of the LAST recipe:
-  "This recipe suggestion is for general information only and is not medical advice."`;
-}
-
-app.post("/api/recipes", async (req, res) => {
-  try {
-    const {
-      goal,
-      dietary,
-      flavors,
-      prep_time,
-      style,
-      base_product_ids,
-      servings,
-    } = req.body || {};
-
-    const payload = {
-      goal: goal || "general wellness",
-      dietary: Array.isArray(dietary) ? dietary : dietary ? [dietary] : [],
-      flavors: Array.isArray(flavors) ? flavors : flavors ? [flavors] : [],
-      prep_time: prep_time || "under 10 minutes",
-      style: style || "warm bowl",
-      base_product_ids:
-        Array.isArray(base_product_ids) && base_product_ids.length
-          ? base_product_ids
-          : products.map((p) => p.id), // if none provided, allow all
-      servings: servings || 1,
-    };
-
-    const systemPrompt = buildRecipeSystemPrompt();
-    const userPrompt = buildRecipeUserPrompt(payload);
-
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    });
-
-    const raw = completion.choices?.[0]?.message?.content;
-    if (!raw) {
-      throw new Error("No content returned from OpenAI for recipes");
-    }
-
-    console.log("OpenAI recipes raw:", raw); // 🔍 debug log for recipes
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      console.error("Failed to parse JSON from recipe model:", raw);
-      throw new Error("Model did not return valid JSON for recipes.");
-    }
-
-    const recipes_raw = Array.isArray(parsed.recipes) ? parsed.recipes : [];
-
-    const validIds = new Set(products.map((p) => p.id));
-
-    const recipes = recipes_raw.map((r) => {
-      const base_products = Array.isArray(r.base_products)
-        ? r.base_products.filter((id) => validIds.has(id))
-        : [];
-
-      return {
-        title: r.title || "Daily N'Oats Recipe",
-        description: r.description || "",
-        base_products,
-        ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
-        steps: Array.isArray(r.steps) ? r.steps : [],
-        macros: r.macros || null,
-        tags: Array.isArray(r.tags) ? r.tags : [],
-        servings: r.servings || payload.servings || 1,
-      };
-    });
-
-    // Return recipes AND the transform page URL so the front-end can link to it
-    res.json({
-      recipes,
-      transform_url: TRANSFORM_URL,
-    });
-  } catch (err) {
-    console.error("Recipe API error:", err);
-    res.status(500).json({
-      error: "Server error",
-      message: err.message || "Unknown error generating recipes",
-    });
+      </div>
+    `;
   }
-});
 
-/* -------------------------------------------------------
-   Start server
-   ------------------------------------------------------- */
+  function renderConvertedRecipe(converted, comparison, warnings, suggested) {
+    if (!converted) {
+      convertedEl.innerHTML = "<p>Conversion failed or missing.</p>";
+      return;
+    }
 
-app.listen(PORT, () => {
-  console.log(`Daily N'Oats AI server running on port ${PORT}`);
-});
+    const qs = converted.quick_stats || {};
+    const nutr = converted.nutrition || {};
+    const per = nutr.per_serving || {};
+    const orig = nutr.original || {};
+    const macro = nutr.macro_split || {};
+
+    const ingHtml = (converted.ingredients || [])
+      .map(i => `<li>${i.amount ? `<strong>${i.amount}</strong> ` : ""}${i.item || ""}${i.notes ? ` <em>(${i.notes})</em>` : ""}</li>`)
+      .join("");
+
+    const stepsHtml = (converted.instructions || [])
+      .map((s, idx) => `<li><strong>Step ${idx + 1}:</strong> ${s}</li>`)
+      .join("");
+
+    const notesHtml = (converted.chefs_notes || [])
+      .map(n => `<li>${n}</li>`)
+      .join("");
+
+    const warningsHtml = (warnings || [])
+      .map(w => `<li>${w}</li>`)
+      .join("");
+
+    const suggestionsHtml = (suggested || [])
+      .map(s => `<li>${s}</li>`)
+      .join("");
+
+    const compHtml = comparison
+      ? `
+        <p>${comparison.summary || ""}</p>
+        <ul>${(comparison.details || []).map(d => `<li>${d}</li>`).join("")}</ul>
+      `
+      : "";
+
+    const carbDrop =
+      typeof nutr.carb_reduction_percent === "number"
+        ? nutr.carb_reduction_percent.toFixed(0)
+        : null;
+
+    convertedEl.innerHTML = `
+      <div style="border:1px solid #e0e7db; border-radius:12px; padding:14px 16px;">
+        <h2 style="margin-top:0;">${converted.title || "Low-Carb Daily N'Oats Version"}</h2>
+        <div style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+          font-size:0.9rem;
+          margin-bottom:0.75rem;
+        ">
+          <span>⏱️ Prep: ${qs.prep_time || "n/a"}</span>
+          <span>🍳 Cook: ${qs.cook_time || "n/a"}</span>
+          <span>🍽️ Servings: ${qs.servings || "n/a"}</span>
+          ${
+            typeof qs.net_carbs_per_serving === "number" &&
+            typeof qs.original_net_carbs_per_serving === "number"
+              ? `<span>🔥 Net Carbs: ${qs.net_carbs_per_serving}g (down from ${qs.original_net_carbs_per_serving}g)</span>`
+              : ""
+          }
+        </div>
+
+        ${
+          carbDrop !== null
+            ? `<p style="font-weight:600; color:#2c5f2d;">💪 Approx. ${carbDrop}% reduction in net carbs per serving</p>`
+            : ""
+        }
+
+        <h3>Ingredients</h3>
+        <ul>${ingHtml}</ul>
+
+        <h3>Instructions</h3>
+        <ol>${stepsHtml}</ol>
+
+        <h3>Nutritional Information (per serving)</h3>
+        <p style="font-size:0.9rem;">
+          Calories: ${per.calories ?? "n/a"} &nbsp; | &nbsp;
+          Net carbs: ${per.net_carbs ?? "n/a"}g &nbsp; | &nbsp;
+          Protein: ${per.protein ?? "n/a"}g &nbsp; | &nbsp;
+          Fat: ${per.fat ?? "n/a"}g &nbsp; | &nbsp;
+          Fiber: ${per.fiber ?? "n/a"}g
+        </p>
+        ${
+          macro && (macro.protein_percent || macro.carb_percent || macro.fat_percent)
+            ? `<p style="font-size:0.9rem;">
+          Macro split: Protein ${macro.protein_percent ?? "?"}% •
+          Fat ${macro.fat_percent ?? "?"}% •
+          Carbs ${macro.carb_percent ?? "?"}%
+        </p>`
+            : ""
+        }
+
+        ${
+          compHtml
+            ? `<h3>Original vs. Low-Carb Comparison</h3>${compHtml}`
+            : ""
+        }
+
+        ${
+          notesHtml
+            ? `<h3>Chef's Notes</h3><ul>${notesHtml}</ul>`
+            : ""
+        }
+      </div>
+    `;
+
+    metaEl.innerHTML = `
+      ${
+        converted.why_this_works
+          ? `<p>${converted.why_this_works}</p>`
+          : ""
+      }
+      ${
+        warningsHtml
+          ? `<h4>Warnings / Caveats</h4><ul>${warningsHtml}</ul>`
+          : ""
+      }
+      ${
+        suggestionsHtml
+          ? `<h4>Suggested Variations</h4><ul>${suggestionsHtml}</ul>`
+          : ""
+      }
+    `;
+  }
+
+  async function handleConvertClick() {
+    try {
+      resetProgress();
+      setProgress("intake");
+      setStatus("Understanding your recipe...");
+
+      resultsSection.style.display = "none";
+      convertedEl.innerHTML = "";
+      originalEl.innerHTML = "";
+      metaEl.innerHTML = "";
+
+      convertBtn.disabled = true;
+
+      let input_type = "text";
+      let recipe_data = "";
+      let images_base64 = [];
+      let pdf_base64 = null;
+
+      if (currentMode === "url") {
+        input_type = "url";
+        recipe_data = (urlInput.value || "").trim();
+      } else if (currentMode === "upload") {
+        if (!selectedFiles.length) {
+          alert("Please upload at least one image or PDF.");
+          convertBtn.disabled = false;
+          setStatus("");
+          return;
+        }
+        const pdfFiles = selectedFiles.filter(f => f.type === "application/pdf");
+        const imageFiles = selectedFiles.filter(f => f.type.startsWith("image/"));
+
+        if (pdfFiles.length) {
+          input_type = "pdf";
+          setStatus("Reading PDF...");
+          pdf_base64 = await readFileAsBase64(pdfFiles[0]);
+        } else if (imageFiles.length) {
+          input_type = "image";
+          setStatus("Reading image(s)...");
+          images_base64 = await Promise.all(imageFiles.map(readFileAsBase64));
+        } else {
+          alert("Only image and PDF files are supported.");
+          convertBtn.disabled = false;
+          setStatus("");
+          return;
+        }
+      } else {
+        input_type = "text";
+        recipe_data = (textarea.value || "").trim();
+      }
+
+      if ((input_type === "text" || input_type === "url") && !recipe_data) {
+        alert("Please provide recipe text or a URL.");
+        convertBtn.disabled = false;
+        setStatus("");
+        return;
+      }
+
+      setProgress("analysis");
+      setStatus("Analyzing carbs and swap opportunities...");
+
+      const dietary_restrictions = collectDietaryRestrictions();
+      const user_preferences = {
+        sweetener: prefSweetener.value || null,
+        milk_type: prefMilk.value || null
+      };
+
+      setProgress("conversion");
+      setStatus("Converting to a Daily N'Oats low-carb version...");
+
+      const payload = {
+        input_type,
+        recipe_data,
+        images_base64,
+        pdf_base64,
+        dietary_restrictions,
+        user_preferences
+      };
+
+      const resp = await fetch("https://dailynoats-ai.onrender.com/api/recipe-convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const json = await resp.json();
+
+      if (!resp.ok || json.status === "error") {
+        console.error("Recipe-convert API error:", json);
+        setStatus("Something went wrong.");
+        alert(json.message || "Sorry, we couldn’t convert this recipe. Please try again.");
+        convertBtn.disabled = false;
+        return;
+      }
+
+      setProgress("nutrition");
+      setStatus("Estimating nutrition & formatting...");
+
+      const { original_recipe, converted_recipe, nutritional_comparison, warnings, suggested_variations } = json;
+
+      renderConvertedRecipe(converted_recipe, nutritional_comparison, warnings, suggested_variations);
+      renderOriginalRecipe(original_recipe);
+
+      setProgress("format");
+      setStatus("Done! Scroll down to see your converted recipe.");
+      resultsSection.style.display = "block";
+    } catch (err) {
+      console.error(err);
+      setStatus("");
+      alert("Sorry, we couldn’t reach the Daily N'Oats AI server. Please try again later.");
+    } finally {
+      convertBtn.disabled = false;
+    }
+  }
+
+  convertBtn.addEventListener("click", handleConvertClick);
+})();
+</script>
