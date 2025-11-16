@@ -438,19 +438,25 @@ Create delicious, practical recipes using ONLY Daily N'Oats products as the base
 You may add common toppings/mix-ins (berries, nuts, seeds, etc.) but the base
 must always be a Daily N'Oats product.
 
-Use the catalog below:
+Use the catalog below for reference:
 
-${RECIPE_CATALOG_SUMMARY}`;
+${RECIPE_CATALOG_SUMMARY}
+
+IMPORTANT JSON INSTRUCTIONS:
+- You will ultimately return your answer as a single JSON object.
+- Do NOT include any markdown, prose, or explanations outside of JSON.
+- All fields you return must be valid JSON keys/values, not comments.`;
 }
 
 function buildRecipeUserPrompt(payload) {
   return `
 Create 1–3 Daily N'Oats recipes.
 
-INPUT:
+INPUT DATA (JSON-like):
 ${JSON.stringify(payload, null, 2)}
 
-OUTPUT FORMAT:
+You MUST respond with ONLY valid JSON (no markdown, no commentary), in exactly
+this structure:
 
 {
   "recipes": [
@@ -475,8 +481,15 @@ OUTPUT FORMAT:
   ]
 }
 
-Include this disclaimer in the LAST recipe description:
-"This recipe suggestion is for general information only and is not medical advice."`;
+REQUIREMENTS:
+- "recipes" MUST be a JSON array (1–3 items).
+- Every "base_products" id MUST match one of the product ids in the catalog.
+- Steps MUST describe how to prepare Daily N'Oats (you may say:
+  "Either add milk and let it sit overnight or cook it. We suggest cooking it.")
+- The LAST recipe's "description" MUST include this sentence:
+  "This recipe suggestion is for general information only and is not medical advice."
+
+Again: reply with a single JSON object only.`;
 }
 
 app.post("/api/recipes", async (req, res) => {
